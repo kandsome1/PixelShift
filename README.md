@@ -228,3 +228,26 @@ python tools/smoke_test.py
 ```
 
 预期输出 `===== 结果：通过 30 · 失败 0 =====`。
+
+---
+
+## 九、版本管理
+
+本地仓库已初始化：分支 `main`，首个提交 `f7d03d7`，tag `v1.0.0`（仅本地，未配置远端）。
+
+```bat
+git status                    :: 看改动
+git add -A
+git commit -m "改了什么"
+git log --oneline --decorate  :: 看历史
+git tag v1.0.1                :: 打版本
+```
+
+约定：
+
+- `.gitignore` 已排除 `__pycache__`、`out_*`、`_pixelshift/`、`PixelShift_报告_*.csv`、
+  `*.ps_tmp*`、`shot_*.png` 等运行时产物——处理结果不会污染提交。
+- `.gitattributes` 固定换行：源码 LF，`*.bat` 强制 CRLF（cmd 对 LF-only 批处理支持不稳），
+  图片/视频标为 binary。仓库内已设置 `core.autocrlf=false`、`core.quotepath=false`
+  （中文文件名正常显示）、`i18n.commitEncoding=utf-8`。
+
