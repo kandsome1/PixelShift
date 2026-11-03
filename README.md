@@ -1,6 +1,6 @@
 # PixelShift
 
-![version](https://img.shields.io/badge/version-1.4.1-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-1.4.2-blue?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![dependencies](https://img.shields.io/badge/dependencies-Pillow-brightgreen?style=flat-square)
@@ -18,8 +18,8 @@
 
 | 文件 | 大小 | 说明 |
 |---|---|---|
-| `PixelShift-1.4.1-win64.exe` | 11.6 MB | **推荐**。单文件，双击即用，不用装 Python |
-| `PixelShift-1.4.1-win64-onedir.zip` | 25.8 MB | 解压后双击 `PixelShift.exe`。启动更快（1.3s vs 2.5s），杀软误报更少 |
+| `PixelShift-1.4.2-win64.exe` | 11.6 MB | **推荐**。单文件，双击即用，不用装 Python |
+| `PixelShift-1.4.2-win64-onedir.zip` | 25.8 MB | 解压后双击 `PixelShift.exe`。启动更快（1.3s vs 2.5s），杀软误报更少 |
 
 页面底部的 `Source code` 是源码包，普通使用不用下。
 
