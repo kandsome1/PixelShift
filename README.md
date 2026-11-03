@@ -204,12 +204,97 @@ CSV 为 UTF-8-BOM，Excel 直接双击可读：
 
 ---
 
-## 八、目录结构
+## 九、打包成 exe
+
+### 三条技术路线
+
+| 路线 | 代表工具 | 本质 | 代价 |
+|---|---|---|---|
+| **打包派** | PyInstaller / cx_Freeze | 把 CPython 解释器（`python312.dll`）+ 标准库 `.pyc` + 第三方 `.pyd` + 你的代码 + 一个 C 写的 bootloader 打在一起。**不是编译**，代码是字节码 | 体积大；`.pyc` 可被 pyinstxtractor + decompyle 还原 |
+| **编译派** | Nuitka / Cython / mypyc | 把 Python 翻译成 C，再用 MSVC/MinGW 编译成真机器码 | 首次构建 10~30 分钟；需要 C 工具链 |
+| **嵌入派** | python-build-standalone + 自写 launcher | 手工组织可重定位的 Python 目录，写个小启动器 | 工程量大，但体积与特征最可控 |
+
+本项目采用**打包派（PyInstaller）**：构建快、生态成熟、对 tkinter + Pillow 支持好。
+
+bootloader 的两种形态：
+
+- **onedir**：`PixelShift.exe`（约 2.9 MB）+ `_internal/` 目录，运行时直接加载，启动快
+- **onefile**：全部内容塞进一个 exe，运行时解压到 `%TEMP%\_MEIxxxx`，分发方便但启动慢
+
+### 已内置的构建脚本
+
+```bat
+build_exe.bat            :: onedir，产物 dist\PixelShift\PixelShift.exe
+build_exe.bat onefile    :: 单文件，产物 dist_onefile\PixelShift.exe
+```
+
+对应 `PixelShift.spec` 与 `PixelShift.onefile.spec`，两者都做了体积裁剪。
+
+### 实测数据（本机，Python 3.12.10 / Pillow 12.2.0）
+
+| 形态 | 体积 | 文件数 | 冷启动 |
+|---|---|---|---|
+| onedir 未优化 | 39.5 MB | 999 | — |
+| onedir 优化后 | **25.8 MB** | 993 | **1.29 s** |
+| onefile 优化后 | **11.6 MB** | 1 | **2.22 s** |
+
+裁剪了什么（省下 13.7 MB）：
+
+| 剔除项 | 省下 | 原因 |
+|---|---|---|
+| `PIL\_avif.cp312-win_amd64.pyd` | 7.5 MB | 本项目不支持 AVIF |
+| `libcrypto-3.dll` + `libssl-3.dll` | 5.8 MB | 全程不联网，`ssl`/`_ssl`/`_hashlib` 一并排除 |
+| `numpy` / `pandas` / `scipy` / `matplotlib` / `pytest` / `IPython` | — | 从未 import，但在 Analysis 阶段会被拖进来 |
+
+刻意**不启用 UPX 压缩**：压缩后的 exe 杀软误报率明显升高，省下的几 MB 不值得。
+
+### ffmpeg 怎么处理（关键决策）
+
+本机静态全功能版 `ffmpeg.exe` 217 MB、`ffprobe.exe` 217 MB——直接塞进包会让体积失控。三条路：
+
+| 方案 | 做法 | 体积 | 适用 |
+|---|---|---|---|
+| **A. 不打包（当前默认）** | 运行时按 `PATH` → exe 同目录 → `bin/` → `ffmpeg/` → 常见安装目录 顺序查找；找不到时图片功能照常，视频提示缺失 | 0 | 自己电脑用、用户已装 ffmpeg |
+| **B. 随包放精简版** | 把 30~60 MB 的 shared/minimal 构建放进 `dist\PixelShift\_internal\ffmpeg\`，代码已支持从该目录加载 | +30~60 MB | 分发给不会装软件的人 |
+| **C. 首次运行下载** | 启动时检测并引导下载 | 0 | 需要网络与校验逻辑 |
+
+方案 B 只需两步：
+
+```bat
+mkdir dist\PixelShift\_internal\ffmpeg
+copy <精简版>\ffmpeg.exe  dist\PixelShift\_internal\ffmpeg\
+copy <精简版>\ffprobe.exe dist\PixelShift\_internal\ffmpeg\
+```
+
+### 四个必踩的坑（本项目已处理）
+
+1. **`--windowed` 会吞掉异常**：打包后崩溃就是静默退出，什么都没有。
+   已在 `app.py` 装 `sys.excepthook`，把 traceback 写到
+   `%LOCALAPPDATA%\PixelShift\crash.log` 并弹窗。
+2. **`sys.stdout` / `sys.stderr` 在 windowed 下是 `None`**：任何 `print` 直接抛
+   `AttributeError`。已加 `_fix_std_streams()` 把它们指向 `os.devnull`。
+3. **`__file__` 指向临时解压目录**：onefile 下读"项目同目录"的资源会失败，
+   资源路径要走 `sys._MEIPASS`。本项目没有外部资源依赖，未受影响。
+4. **杀软误报**：PyInstaller bootloader 是常见特征，onefile 尤甚。缓解手段是
+   onedir + 不上 UPX + 代码签名（自签名可消除内网分发时的警告）。
+
+### 分发提示
+
+未签名的 exe 首次运行会被 SmartScreen 拦下（"Windows 已保护你的电脑"），
+需要点「更多信息 → 仍要运行」。要彻底消除得买代码签名证书（OV/EV）；
+内网自用可以用自签名证书 + 手动导入受信任根。
+
+---
+
+## 十、目录结构
 
 ```
 PixelShift/
-├── app.py                      入口（GUI / CLI 二合一）
+├── app.py                      入口（GUI / CLI 二合一，含崩溃日志钩子）
 ├── 启动 PixelShift.bat         双击启动
+├── build_exe.bat               打包 exe（onedir / onefile）
+├── PixelShift.spec             PyInstaller onedir 描述
+├── PixelShift.onefile.spec     PyInstaller onefile 描述
 ├── requirements.txt
 ├── pixelshift/
 │   ├── __init__.py

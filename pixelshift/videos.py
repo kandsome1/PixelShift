@@ -28,11 +28,30 @@ class VideoError(RuntimeError):
 
 # ------------------------------------------------------------------ 二进制探测
 def find_bin(name: str) -> str | None:
-    """找 ffmpeg/ffprobe：先 PATH，再常见安装目录。"""
+    """找 ffmpeg/ffprobe：先 PATH，再 exe 同级目录，最后常见安装目录。"""
     exe = name + (".exe" if os.name == "nt" else "")
     p = shutil.which(name) or shutil.which(exe)
     if p:
         return p
+    # 打包成 exe 后，允许把 ffmpeg 放在 exe 同目录 / bin / ffmpeg 子目录里
+    import sys as _sys
+    roots = []
+    try:
+        roots.append(Path(_sys.executable).parent)
+    except Exception:
+        pass
+    try:
+        roots.append(Path(_sys.argv[0]).resolve().parent)
+    except Exception:
+        pass
+    for root in roots:
+        for sub in (root, root / "bin", root / "ffmpeg", root / "_internal" / "ffmpeg"):
+            try:
+                cand = sub / exe
+                if cand.is_file():
+                    return str(cand)
+            except OSError:
+                continue
     candidates = [
         Path(r"C:\Program Files\ffmpeg\bin") / exe,
         Path(r"C:\ffmpeg\bin") / exe,

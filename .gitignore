@@ -4,7 +4,9 @@ __pycache__/
 *$py.class
 *.egg-info/
 build/
+build_*/
 dist/
+dist_*/
 .venv/
 venv/
 env/
@@ -15,6 +17,7 @@ _pixelshift/
 PixelShift_报告_*.csv
 *.ps_tmp*
 *.tmp
+crash.log
 
 # ---------- 测试 / 调试产物 ----------
 shot_*.png

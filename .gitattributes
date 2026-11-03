@@ -10,6 +10,7 @@
 *.md   text eol=lf
 *.txt  text eol=lf
 *.json text eol=lf
+*.spec text eol=lf
 
 # 批处理必须是 CRLF：cmd.exe 对 LF-only 的 .bat 在 goto/括号块上会出问题
 *.bat  text eol=crlf
