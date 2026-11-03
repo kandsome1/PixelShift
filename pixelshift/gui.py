@@ -28,6 +28,7 @@ from .config import (DEFAULT_PRESET, IMAGE_EXTS, PRESETS, SUPPORTED_EXTS, VIDEO_
                      kind_of, preset_options)
 from .engine import Engine, Job, Record, Summary, collect_files
 from .hasher import digest_file, human_size
+from . import mp4box
 from .videos import check_tools
 
 # Windows 用原生 WM_DROPFILES（零依赖，见 dnd.py）；其它平台才尝试 tkinterdnd2
@@ -251,6 +252,7 @@ class PixelShiftApp(_BaseTk):
         self.v_vid_mirror = tk.BooleanVar(value=False)
         self.v_vid_crop = tk.StringVar(value="0")
         self.v_vid_speed = tk.StringVar(value="1.000")
+        self.v_vid_fallback = tk.BooleanVar(value=True)
         # —— 输出
         self.v_out_dir = tk.StringVar(value="")
         self.v_mirror_dir = tk.BooleanVar(value=True)
@@ -503,12 +505,18 @@ class PixelShiftApp(_BaseTk):
         r += 1
         modes = [("remux", "重封装 · 最快", "-c copy，只重写容器与元数据，画面零损失，体积基本不变"),
                  ("light", "轻度重编码 · 推荐", "视频重新编码（可带极轻噪声滤镜），音频直接拷贝"),
-                 ("deep", "深度变形 · 最强", "缩放往返 + 噪声 + 色调 + 关键帧重排 + 音频重编码")]
+                 ("deep", "深度变形 · 最强", "缩放往返 + 噪声 + 色调 + 关键帧重排 + 音频重编码"),
+                 ("metabox", "仅改元数据 · 免 ffmpeg",
+                  "纯 Python 改写 MP4/MOV 容器（时间戳 + iTunes 标签），秒级完成，"
+                  "画面与时长完全不变；没有 ffmpeg 也能用")]
         for i, (val, name, desc) in enumerate(modes):
             ttk.Radiobutton(f1, text=name, value=val, variable=self.v_vid_mode) \
                 .grid(row=i * 2, column=0, sticky="w", padx=10, pady=(5 if i == 0 else 2, 0))
             ttk.Label(f1, text=desc, style="Hint.TLabel", wraplength=430) \
                 .grid(row=i * 2 + 1, column=0, sticky="w", padx=(28, 10), pady=(0, 3))
+        ttk.Checkbutton(f1, text="缺 ffmpeg 时自动降级为「仅改元数据」",
+                        variable=self.v_vid_fallback) \
+            .grid(row=len(modes) * 2, column=0, sticky="w", padx=10, pady=(8, 6))
 
         f2 = ttk.Labelframe(body, text=" 编码参数 ")
         f2.grid(row=r, column=0, sticky="ew", padx=12, pady=6)
@@ -977,6 +985,7 @@ class PixelShiftApp(_BaseTk):
         self.v_vid_crop.set(f"{vid.crop_percent:g}")
         self.v_vid_mirror.set(vid.mirror)
         self.v_vid_speed.set(f"{vid.speed:.3f}")
+        self.v_vid_fallback.set(vid.no_ffmpeg_fallback)
 
         self._sync_combo_display()
         if not silent:
@@ -1054,6 +1063,8 @@ class PixelShiftApp(_BaseTk):
             mirror=bool(self.v_vid_mirror.get()),
             crop_percent=max(0.0, min(6.0, self._as_float(self.v_vid_crop, 0.0))),
             speed=max(0.9, min(1.1, self._as_float(self.v_vid_speed, 1.0))),
+            no_ffmpeg_fallback=bool(self.v_vid_fallback.get()),
+            metabox_patch_mdhd=True,
         )
         return RunOptions(
             out_dir=self.v_out_dir.get().strip(),
@@ -1085,10 +1096,29 @@ class PixelShiftApp(_BaseTk):
                 return
         videos_in_list = [j for j in self.jobs if j.kind == "video"]
         if videos_in_list:
-            ok, msg = check_tools()
-            if not ok:
-                messagebox.showerror("缺少 ffmpeg", msg + "\n\n可先只处理图片，或安装 ffmpeg 后重试。")
-                return
+            ff_ok, msg = check_tools()
+            if not ff_ok:
+                mode = self.v_vid_mode.get()
+                allow_fallback = bool(self.v_vid_fallback.get())
+                if mode != "metabox" and not allow_fallback:
+                    messagebox.showerror(
+                        "缺少 ffmpeg",
+                        msg + "\n\n可选：\n"
+                              "· 安装 ffmpeg 后重试\n"
+                              "· 视频处理方式改为「仅改元数据 · 免 ffmpeg」\n"
+                              "· 勾选「缺少 ffmpeg 时自动降级」\n"
+                              "· 或只处理图片")
+                    return
+                unsupported = [j for j in videos_in_list if not mp4box.supported(j.src)]
+                if unsupported:
+                    names = "、".join(p.src.name for p in unsupported[:6])
+                    more = f" 等 {len(unsupported)} 个" if len(unsupported) > 6 else ""
+                    if not messagebox.askokcancel(
+                            "部分视频无法降级",
+                            f"没有找到 ffmpeg，视频将改用「仅改元数据」模式。\n\n"
+                            f"但下面这些不是 MP4/MOV 容器，会被跳过：\n{names}{more}\n\n继续吗？"):
+                        return
+                self._log("未检测到 ffmpeg：视频走「仅改元数据」模式（纯 Python，不重编码）", "warn")
 
         for iid in self.tree.get_children():
             self.tree.set(iid, "status", "排队中")

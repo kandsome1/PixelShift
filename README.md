@@ -114,6 +114,37 @@ ffmpeg 没装时的表现：图片照常处理，视频会被跳过并提示。�
   `handler_name` / `creation_time` / `encoder`。MP4/MOV 还会重写
   `video_track_timescale` 并做 faststart 重排。
 
+### 4. 免 ffmpeg 的容器级改写（metabox 模式）
+
+视频的第四种模式，**完全不调用 ffmpeg**——纯 Python 解析 MP4/MOV 的 box 结构，只重写
+`moov` 这棵子树：
+
+```
+moov
+├── mvhd            ← 改写 creation_time / modification_time（1904 纪元）
+├── trak/mdia/mdhd  ← 每个轨道同样改写时间戳
+└── udta/meta/ilst  ← 重建 iTunes 标签：©too / ©nam / ©cmt / desc / ©day
+```
+
+源文件没有 `udta` 时会按规范新建一整套（`meta` + `hdlr(mdir/appl)` + `ilst` + `data`）。
+
+| 项 | 说明 |
+|---|---|
+| 速度 | 秒级。只读 `moov`（几 KB~几 MB），`mdat` 按 4 MB 分块流式拷贝，几十 GB 也不吃内存 |
+| 依赖性 | **零依赖**，机器上没装 ffmpeg 也能跑 |
+| 画面 | 完全不碰，mdat 字节级一致（测试里逐字节比对过） |
+| 时长 / 分辨率 / 码率 | 完全不变 |
+| 文件哈希 | 必变（moov 重建 + 随机元数据） |
+| 合规性 | 结构合法，ffprobe、播放器、剪辑软件都能正常解析 |
+
+两种触发方式：
+
+1. **主动选**：「视频 → 处理方式 → 仅改元数据 · 免 ffmpeg」
+2. **自动降级**：勾选「缺 ffmpeg 时自动降级」，检测不到 ffmpeg 时 MP4/MOV 走这条路，
+   其它容器（mkv/avi/webm…）仍会跳过并提示
+
+> 它只动容器账本，**不改变感知哈希**。要让画面指纹也变，仍然需要 light / deep 那两档。
+
 ---
 
 ## 五、命令行用法（可选，适合脚本批处理）
@@ -138,6 +169,8 @@ python app.py -i D:\素材 -o D:\输出 --seed 2024
 | `-o/--out` | 输出目录；留空则写到源目录旁 `_pixelshift` |
 | `-p/--preset` | `light` / `medium` / `strong` |
 | `--only` | `all` / `image` / `video` |
+| `--video-mode` | `remux` / `light` / `deep` / `metabox`（覆盖预设；metabox 不需要 ffmpeg） |
+| `--no-fallback` | 缺少 ffmpeg 时不自动降级到 metabox |
 | `--concurrency` | 图片并发线程（默认 4） |
 | `--video-workers` | 同时跑的 ffmpeg 数量（默认 2） |
 | `--overwrite` | 同名覆盖而不是改名 |
@@ -176,7 +209,12 @@ CSV 为 UTF-8-BOM，Excel 直接双击可读：
 
 **视频很慢？**
 `deep` 模式是完整重编码。1 分钟 1080p 大约需要 1~3 分钟（取决于 CPU）。
-赶时间就把模式换成 `remux`（秒级）或 `light`。
+赶时间就把模式换成 `remux`（秒级）或 `light`；只想换掉文件哈希就选 `metabox`（也是秒级）。
+
+**没装 ffmpeg 还能处理视频吗？**
+能。MP4/MOV 走「仅改元数据」模式（纯 Python 改容器，见第四章第 4 节），文件哈希必变、
+结构仍然合法、画面与时长不动。默认已勾选「缺 ffmpeg 时自动降级」，不用手动切换。
+MKV / AVI / WEBM 这类非 box 容器做不到，会被跳过并提示。
 
 **能拖文件进窗口吗？**
 能，Windows 下直接拖，不需要装任何东西。实现方式（`pixelshift/dnd.py`）是对 Tk 顶层窗口
@@ -200,11 +238,12 @@ CSV 为 UTF-8-BOM，Excel 直接双击可读：
 
 **支持哪些格式？**
 图片：jpg / jpeg / png / webp / bmp / tif / tiff / gif（含动画）/ ppm
-视频：mp4 / m4v / mov / mkv / avi / flv / wmv / webm / ts / mpg / mpeg / m2ts / 3gp / rmvb
+视频（ffmpeg 模式）：mp4 / m4v / mov / mkv / avi / flv / wmv / webm / ts / mpg / mpeg / m2ts / 3gp / rmvb
+视频（metabox 免 ffmpeg 模式）：mp4 / m4v / mov / 3gp / m4a
 
 ---
 
-## 九、打包成 exe
+## 八、打包成 exe
 
 ### 三条技术路线
 
@@ -286,7 +325,7 @@ copy <精简版>\ffprobe.exe dist\PixelShift\_internal\ffmpeg\
 
 ---
 
-## 十、目录结构
+## 九、目录结构
 
 ```
 PixelShift/
@@ -304,13 +343,15 @@ PixelShift/
 │   ├── random_fp.py            随机指纹素材（设备、软件、日期、注释）
 │   ├── images.py               图片管线
 │   ├── videos.py               视频管线（ffmpeg 调用 + 进度解析）
+│   ├── mp4box.py               免 ffmpeg 的 MP4/MOV 容器元数据改写
 │   ├── engine.py               任务调度、输出路径、并发、CSV 报告
 │   ├── gui.py                  tkinter 界面
 │   └── cli.py                  命令行
 ├── samples/                    自带测试素材（可删）
 └── tools/
     ├── make_samples.py         生成测试素材
-    ├── smoke_test.py           回归自测（30 项）
+    ├── smoke_test.py           回归自测（34 项）
+    ├── mp4box_test.py          免 ffmpeg 容器改写自测（42 项，含 ffprobe 交叉验证）
     ├── dnd_test.py             拖放链路自测（构造 WM_DROPFILES 投递，14 项）
     └── gui_selfcheck.py        界面截图自检
 ```
@@ -318,15 +359,16 @@ PixelShift/
 自测：
 
 ```bat
-python tools/smoke_test.py     :: 引擎与管线：30 项
+python tools/smoke_test.py     :: 引擎与管线：34 项
+python tools/mp4box_test.py    :: 免 ffmpeg 容器改写：42 项
 python tools/dnd_test.py       :: 拖放链路：14 项
 ```
 
-预期分别输出 `===== 结果：通过 30 · 失败 0 =====` 与 `通过 14 · 失败 0`。
+预期分别输出 `通过 34 · 失败 0`、`通过 42 · 失败 0`、`通过 14 · 失败 0`。
 
 ---
 
-## 九、版本管理
+## 十、版本管理
 
 本地仓库已初始化：分支 `main`，首个提交 `f7d03d7`，tag `v1.0.0`（仅本地，未配置远端）。
 

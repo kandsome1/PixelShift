@@ -12,7 +12,7 @@ from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import images, videos
+from . import images, mp4box, videos
 from .config import IMAGE_EXTS, RunOptions, kind_of
 from .hasher import digest_file, hash_distance, human_size, perceptual_hash, unique_path
 
@@ -153,8 +153,19 @@ class Engine:
             if fixed:
                 return fixed
             return job.src.suffix.lower() or ".png"
+        if self.opts.video.mode == "metabox":
+            # 纯容器改写不能换容器
+            return job.src.suffix.lower() or ".mp4"
         container, ext = videos.target_container(self.opts.video, job.src)
         return ext
+
+    def _use_metabox(self, job: Job) -> bool:
+        """该视频走不走"纯 Python 改元数据"这条路。"""
+        if self.opts.video.mode == "metabox":
+            return True
+        if not self.opts.video.no_ffmpeg_fallback:
+            return False
+        return not videos.tools_available() and mp4box.supported(job.src)
 
     # ---------------------------------------------------------- 单任务
     def run_one(self, job: Job, index: int, total: int) -> Record:
@@ -196,6 +207,11 @@ class Engine:
                 ext = self._predict_ext(job, random.Random(seed))
                 dst = self._dst_for(job, ext)
                 tmp_dst, restore = self._temp_target(job, dst)
+                use_metabox = self._use_metabox(job)
+                if use_metabox and not mp4box.supported(job.src):
+                    rec.status = "skipped"
+                    rec.error = f"{job.src.suffix} 不是 MP4/MOV 容器，metabox 模式无法处理"
+                    return rec
 
                 def prog(frac: float) -> None:
                     self._emit("progress", (index, frac))
@@ -204,17 +220,29 @@ class Engine:
                     if self.cancel.is_set():
                         rec.status = "cancelled"
                         return rec
-                    info = videos.process_video(job.src, tmp_dst, self.opts.video,
-                                                seed=seed, on_progress=prog,
-                                                cancel=self.cancel)
+                    if use_metabox:
+                        if not mp4box.supported(job.src):
+                            raise mp4box.MP4BoxError(
+                                f"缺少 ffmpeg，且 {job.src.suffix} 不是 MP4/MOV 容器，无法降级")
+                        info = mp4box.process(
+                            job.src, tmp_dst, seed=seed,
+                            patch_mdhd=self.opts.video.metabox_patch_mdhd)
+                        self._emit("progress", (index, 1.0))
+                    else:
+                        info = videos.process_video(job.src, tmp_dst, self.opts.video,
+                                                    seed=seed, on_progress=prog,
+                                                    cancel=self.cancel)
                 if restore:
                     tmp_dst.parent.mkdir(parents=True, exist_ok=True)
                     os.replace(tmp_dst, dst)
                 rec.dst = dst
-                if info.get("note"):
-                    changed_note.append(info["note"])
-                changed_note.append(f"{info.get('engine_mode')} {info.get('out_width')}x"
-                                    f"{info.get('out_height')}")
+                if use_metabox:
+                    changed_note.append("免ffmpeg·容器元数据重建")
+                else:
+                    if info.get("note"):
+                        changed_note.append(info["note"])
+                    changed_note.append(f"{info.get('engine_mode')} {info.get('out_width')}x"
+                                        f"{info.get('out_height')}")
 
             rec.old_size = info.get("old_size", 0)
             rec.new_size = info.get("new_size", 0)

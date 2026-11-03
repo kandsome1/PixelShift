@@ -26,6 +26,11 @@ def build_args(argv=None) -> argparse.Namespace:
     ap.add_argument("-p", "--preset", default="medium", choices=list(PRESETS),
                     help="强度预设：light / medium / strong")
     ap.add_argument("--only", default="all", choices=["all", "image", "video"])
+    ap.add_argument("--video-mode", default=None,
+                    choices=["remux", "light", "deep", "metabox"],
+                    help="视频处理方式，覆盖预设；metabox = 纯 Python 改容器元数据，不需要 ffmpeg")
+    ap.add_argument("--no-fallback", action="store_true",
+                    help="缺少 ffmpeg 时不自动降级到 metabox（默认会降级）")
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--video-workers", type=int, default=2)
     ap.add_argument("--no-recursive", action="store_true", help="目录只处理第一层")
@@ -41,6 +46,10 @@ def build_args(argv=None) -> argparse.Namespace:
 def main(argv=None) -> int:
     args = build_args(argv)
     img_opt, vid_opt = preset_options(args.preset)
+    if args.video_mode:
+        vid_opt.mode = args.video_mode
+    if args.no_fallback:
+        vid_opt.no_ffmpeg_fallback = False
     opts = RunOptions(
         out_dir=args.out,
         collision="overwrite" if args.overwrite else "suffix",

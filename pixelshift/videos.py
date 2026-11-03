@@ -83,6 +83,17 @@ def ffprobe_path() -> str:
     return p
 
 
+_TOOLS_CACHE: bool | None = None
+
+
+def tools_available(refresh: bool = False) -> bool:
+    """ffmpeg 与 ffprobe 是否都可用。结果缓存，避免每个文件都查一遍 PATH。"""
+    global _TOOLS_CACHE
+    if _TOOLS_CACHE is None or refresh:
+        _TOOLS_CACHE = bool(find_bin("ffmpeg")) and bool(find_bin("ffprobe"))
+    return bool(_TOOLS_CACHE)
+
+
 def check_tools() -> tuple[bool, str]:
     try:
         ff = ffmpeg_path()

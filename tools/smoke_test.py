@@ -91,6 +91,19 @@ def main() -> int:
                       f"{pr.width}x{pr.height}")
                 check(f"{mode} MD5 已改变", r.old_md5 != r.new_md5)
 
+        print("\n== 4b. 视频：免 ffmpeg 元数据模式 ==")
+        o_mbx = tmp / "vid_metabox"
+        jobs = collect_files([SAMPLES / "clip_h264.mp4"])
+        s = run(jobs, o_mbx, image=ImageOptions(), video=VideoOptions(mode="metabox"))
+        r = s.records[0]
+        check("metabox 成功", r.ok and r.dst is not None and r.dst.exists(), r.error)
+        if r.ok and r.dst:
+            pr = probe(r.dst)
+            check("metabox 可解码且分辨率保留", pr.width == 640 and pr.height == 360,
+                  f"{pr.width}x{pr.height}")
+            check("metabox MD5 已改变", r.old_md5 != r.new_md5)
+            check("metabox 时长不变", abs(pr.duration - 3.0) < 0.05, f"{pr.duration:.2f}s")
+
         print("\n== 5. 视频：镜像 + 变速 + 裁切 ==")
         o = tmp / "vid_deform"
         jobs = collect_files([SAMPLES / "clip_h264.mp4"])

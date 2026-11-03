@@ -6,7 +6,7 @@ from typing import Literal
 
 # ---------------------------------------------------------------- 类型别名
 ImageFormat = Literal["keep", "jpg", "png", "webp", "bmp", "tiff"]
-VideoMode = Literal["remux", "light", "deep"]
+VideoMode = Literal["remux", "light", "deep", "metabox"]
 VideoContainer = Literal["keep", "mp4", "mkv", "mov"]
 Collision = Literal["suffix", "overwrite", "skip"]
 
@@ -66,7 +66,7 @@ class ImageOptions:
 # ---------------------------------------------------------------- 视频选项
 @dataclass
 class VideoOptions:
-    mode: VideoMode = "light"          # remux 最快 / light 重编码视频 / deep 全变形
+    mode: VideoMode = "light"          # remux 最快 / light 重编码 / deep 全变形 / metabox 免 ffmpeg
     container: VideoContainer = "keep"
     crf: int = 20                      # 16-30
     preset: str = "veryfast"
@@ -84,7 +84,13 @@ class VideoOptions:
     crop_percent: float = 0.0          # 0-6：居中裁掉 N% 再放回原尺寸
     speed: float = 1.0                 # 0.95-1.05：整体变速（音画同步拉伸）
 
+    # —— 免 ffmpeg 兜底（纯 Python 改写 MP4/MOV 容器，见 mp4box.py）
+    no_ffmpeg_fallback: bool = True    # 缺少 ffmpeg 时自动降级到 metabox 模式
+    metabox_patch_mdhd: bool = True    # 顺带改写每个轨道 mdhd 的时间戳
+
     def label(self) -> str:
+        if self.mode == "metabox":
+            return "视频[仅改元数据 · 免 ffmpeg]"
         extra = ""
         if self.mirror:
             extra += " 镜像"
