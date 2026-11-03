@@ -4,6 +4,7 @@
 # 配置文件保持 LF，别被 checkout 成 CRLF
 .gitattributes text eol=lf
 .gitignore     text eol=lf
+LICENSE        text eol=lf
 
 # 源码统一 LF
 *.py   text eol=lf
