@@ -29,7 +29,7 @@ a = Analysis(
     ["app.py"],
     pathex=["."],
     binaries=[],
-    datas=[],                       # 没有需要随包分发的外部资源
+    datas=[("assets/app.ico", "assets")],   # 窗口/任务栏图标，运行时按 _MEIPASS 取
     hiddenimports=PIL_PLUGINS + collect_submodules("pixelshift"),
     hookspath=[],
     hooksconfig={},
@@ -70,7 +70,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,                      # 有图标就填 "assets/app.ico"
+    icon="assets/app.ico",
 )
 
 coll = COLLECT(

@@ -76,6 +76,13 @@ def _enable_dpi_awareness() -> None:
         pass
 
 
+def _resource_path(*parts: str) -> Path:
+    """打包后资源在 _MEIPASS 下，源码运行时在项目根目录。"""
+    base = getattr(sys, "_MEIPASS", None)
+    root = Path(base) if base else Path(__file__).resolve().parent.parent
+    return root.joinpath(*parts)
+
+
 def _tip(widget, text: str) -> None:
     """轻量 tooltip：鼠标悬停 0.45s 出现，避免设置面板里堆满说明文字。"""
     if not text:
@@ -146,6 +153,7 @@ class PixelShiftApp(_BaseTk):
         self._dnd = self._init_dnd()
 
         self._init_style()
+        self._apply_window_icon()
         self._build_vars()
         self._build_menu()
         self._build_ui()
@@ -156,6 +164,21 @@ class PixelShiftApp(_BaseTk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ============================================================ 样式
+    def _apply_window_icon(self) -> None:
+        """标题栏 / 任务栏图标。打包后 exe 自带图标，源码模式靠这句补上。"""
+        ico = _resource_path("assets", "app.ico")
+        if not ico.exists():
+            return
+        path = str(ico)
+        try:
+            self.iconbitmap(default=path)     # 之后弹出的 Toplevel 也继承
+        except tk.TclError:
+            pass
+        try:
+            self.iconbitmap(path)             # 当前窗口
+        except tk.TclError:
+            pass
+
     def _init_style(self) -> None:
         st = ttk.Style(self)
         try:

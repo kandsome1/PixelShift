@@ -29,7 +29,7 @@ a = Analysis(
     ["app.py"],
     pathex=["."],
     binaries=[],
-    datas=[],
+    datas=[("assets/app.ico", "assets")],   # 窗口/任务栏图标，运行时按 _MEIPASS 取
     hiddenimports=PIL_PLUGINS + collect_submodules("pixelshift"),
     hookspath=[],
     hooksconfig={},
@@ -70,5 +70,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon="assets/app.ico",
 )
