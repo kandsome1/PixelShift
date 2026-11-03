@@ -12,7 +12,7 @@ from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import images, mp4box, videos
+from . import images, metainject, mp4box, videos
 from .config import IMAGE_EXTS, RunOptions, kind_of
 from .hasher import digest_file, hash_distance, human_size, perceptual_hash, unique_path
 
@@ -149,6 +149,9 @@ class Engine:
 
     def _predict_ext(self, job: Job, rng: random.Random) -> str:
         if job.kind == "image":
+            if self.opts.image.mode == "metaonly":
+                # 只注入元数据：必须原样保留容器格式
+                return job.src.suffix.lower() or ".jpg"
             fixed = IMAGE_OUT_EXT.get(self.opts.image.out_format)
             if fixed:
                 return fixed
@@ -195,14 +198,22 @@ class Engine:
             if job.kind == "image":
                 ext = self._predict_ext(job, random.Random(seed))
                 dst = self._dst_for(job, ext)
-                info = images.process_image(job.src, dst, self.opts.image, seed=seed)
+                use_metaonly = (self.opts.image.mode == "metaonly"
+                                and metainject.supported(job.src))
+                if use_metaonly:
+                    info = metainject.process(job.src, dst, self.opts.image, seed=seed)
+                    changed_note.append("仅注入元数据")
+                else:
+                    info = images.process_image(job.src, dst, self.opts.image, seed=seed)
+                    if self.opts.image.mode == "metaonly":
+                        changed_note.append(f"{job.src.suffix} 无元数据区，已改用重编码")
+                    if info.get("mirror"):
+                        changed_note.append("镜像")
+                    if info.get("note"):
+                        changed_note.append(info["note"])
+                    if self.opts.image.inject_metadata:
+                        changed_note.append("元数据已重构")
                 rec.dst = Path(info["dst"])
-                if info.get("mirror"):
-                    changed_note.append("镜像")
-                if info.get("note"):
-                    changed_note.append(info["note"])
-                if self.opts.image.inject_metadata:
-                    changed_note.append("元数据已重构")
             else:
                 ext = self._predict_ext(job, random.Random(seed))
                 dst = self._dst_for(job, ext)

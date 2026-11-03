@@ -1,4 +1,4 @@
-"""PixelShift —— 图片 / 视频特征码（文件哈希 + 感知指纹）重写工具。
+﻿"""PixelShift —— 图片 / 视频特征码（文件哈希 + 感知指纹）重写工具。
 
 模块划分：
     config  : 选项与预设
@@ -10,6 +10,6 @@
     cli     : 命令行入口（无界面批处理，也用于自测）
 """
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 APP_NAME = "PixelShift"
 APP_TITLE = "PixelShift · 图片视频特征码改写器"

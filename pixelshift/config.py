@@ -29,6 +29,7 @@ def kind_of(path: str) -> str:
 # ---------------------------------------------------------------- 图片选项
 @dataclass
 class ImageOptions:
+    mode: str = "reencode"             # reencode = 解码重编码；metaonly = 只注入元数据
     out_format: ImageFormat = "keep"   # keep = 保持原格式
     jpeg_quality: int = 95             # 60-100
     jpeg_subsampling: str = "auto"     # auto / 4:2:0 / 4:2:2 / 4:4:4
@@ -51,6 +52,8 @@ class ImageOptions:
     keep_icc: bool = True              # strip 时是否保留 ICC 色彩配置
 
     def label(self) -> str:
+        if self.mode == "metaonly":
+            return "图片[仅注入元数据 · 不重编码]"
         fmt = "原格式" if self.out_format == "keep" else self.out_format.upper()
         extra = ""
         if self.crop_percent > 0:
@@ -141,6 +144,14 @@ def _vid(**kw) -> VideoOptions:
 
 
 PRESETS: dict[str, Preset] = {
+    "lazy": Preset(
+        key="lazy",
+        name="懒人 · 只换特征码",
+        desc="最快一档：不重编码、不动画面，只往容器里注入随机元数据。"
+             "体积几乎不变（±几百字节），秒级完成；视频走纯 Python 改容器，不需要 ffmpeg。",
+        image=_img(mode="metaonly", strip_metadata=True, inject_metadata=True),
+        video=_vid(mode="metabox"),
+    ),
     "light": Preset(
         key="light",
         name="轻度 · 画质优先",

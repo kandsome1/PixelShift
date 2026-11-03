@@ -222,6 +222,7 @@ class PixelShiftApp(_BaseTk):
     # ============================================================ 变量
     def _build_vars(self) -> None:
         # —— 图片
+        self.v_img_mode = tk.StringVar(value="reencode")
         self.v_img_fmt = tk.StringVar(value="keep")
         self.v_img_q = tk.IntVar(value=95)
         self.v_img_png = tk.IntVar(value=-1)
@@ -430,6 +431,21 @@ class PixelShiftApp(_BaseTk):
         canvas.bind("<Configure>", lambda e: canvas.itemconfigure(win, width=e.width))
 
         r = 0
+        f0 = ttk.Labelframe(body, text=" 处理方式 ")
+        f0.grid(row=r, column=0, sticky="ew", padx=12, pady=(10, 6))
+        f0.columnconfigure(0, weight=1)
+        r += 1
+        ttk.Radiobutton(f0, text="重编码（改像素 + 重建元数据）", value="reencode",
+                        variable=self.v_img_mode) \
+            .grid(row=0, column=0, sticky="w", padx=10, pady=(5, 0))
+        ttk.Radiobutton(f0, text="只注入元数据（不重编码，体积几乎不变）", value="metaonly",
+                        variable=self.v_img_mode) \
+            .grid(row=1, column=0, sticky="w", padx=10, pady=(2, 3))
+        ttk.Label(f0, text="只在容器里插入 EXIF 与文本块，压缩数据一个字节不改；"
+                           "BMP / TIFF / PPM 没有元数据区，会自动回退重编码。",
+                  style="Hint.TLabel", wraplength=360) \
+            .grid(row=2, column=0, sticky="w", padx=(28, 10), pady=(0, 8))
+
         f1 = ttk.Labelframe(body, text=" 编码与格式 ")
         f1.grid(row=r, column=0, sticky="ew", padx=12, pady=(10, 6))
         f1.columnconfigure(1, weight=1)
@@ -965,6 +981,7 @@ class PixelShiftApp(_BaseTk):
         self.preset_desc.configure(text=p.desc)
 
         self.v_img_fmt.set(img.out_format)
+        self.v_img_mode.set(img.mode)
         self.v_img_q.set(img.jpeg_quality)
         self.v_img_noise.set(img.pixel_noise)
         self.v_img_delta.set(img.noise_delta)
@@ -1025,6 +1042,7 @@ class PixelShiftApp(_BaseTk):
 
     def _collect_options(self) -> RunOptions:
         img = ImageOptions(
+            mode=self.v_img_mode.get() or "reencode",
             out_format=self.v_img_fmt.get() or "keep",
             jpeg_quality=max(60, min(100, self.v_img_q.get())),
             png_level=max(-1, min(9, self.v_img_png.get())),
