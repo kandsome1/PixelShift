@@ -31,7 +31,7 @@ python app.py
 | Pillow | 9.1+ | `pip install Pillow` |
 | tkinter | Python 自带 | 无需安装 |
 | ffmpeg / ffprobe | 推荐 5.0+ | 处理视频必须；已自动在 PATH 与常见安装目录查找 |
-| tkinterdnd2 | 可选 | 装了才能把文件**拖进窗口** |
+| 拖入文件 | Windows 原生，**零依赖** | 直接子类化窗口过程接管 `WM_DROPFILES`，不用装任何包 |
 
 > **批处理文件必须保持纯 ASCII**：cmd.exe 按系统 OEM 代码页（中文 Windows 是 GBK/936）
 > 逐行解析 `.bat`，文件里一旦有 UTF-8 中文，字节会被错位解释、行被切断，
@@ -179,7 +179,14 @@ CSV 为 UTF-8-BOM，Excel 直接双击可读：
 赶时间就把模式换成 `remux`（秒级）或 `light`。
 
 **能拖文件进窗口吗？**
-需要 `python -m pip install tkinterdnd2`。没装时用按钮添加，功能不受影响。
+能，Windows 下直接拖，不需要装任何东西。实现方式（`pixelshift/dnd.py`）是对 Tk 顶层窗口
+调用 `DragAcceptFiles`，再子类化窗口过程截获 `WM_DROPFILES`，用 `DragQueryFileW` 取出
+路径。由于该回调运行在 Tcl 消息派发栈里，回调内**只把路径塞进队列、不碰任何 Tk API**
+（否则会重入解释器并触发 `PyEval_RestoreThread` 崩溃），由主线程 120ms 轮询取出后再入列表。
+
+拖入支持：单个/多个文件、整个文件夹（自动递归）、混合拖入；重复文件自动去重；
+不支持的扩展名会被过滤并在右侧提示条给出原因。列表头部会显示
+「⇩ 可直接把文件 / 文件夹拖到这里」，成功拖入后短暂变成绿色「✔ 已拖入 N 个文件」。
 
 **原文件会被覆盖吗？**
 默认不会：结果写到别的目录，源文件原样保留。只有当「输出目录」选成源文件所在目录
@@ -207,6 +214,7 @@ PixelShift/
 ├── pixelshift/
 │   ├── __init__.py
 │   ├── config.py               所有选项、三种预设
+│   ├── dnd.py                  Windows 原生拖放（WM_DROPFILES，零依赖）
 │   ├── hasher.py               MD5 / SHA1 / 体积 / pHash / aHash
 │   ├── random_fp.py            随机指纹素材（设备、软件、日期、注释）
 │   ├── images.py               图片管线
@@ -218,16 +226,18 @@ PixelShift/
 └── tools/
     ├── make_samples.py         生成测试素材
     ├── smoke_test.py           回归自测（30 项）
+    ├── dnd_test.py             拖放链路自测（构造 WM_DROPFILES 投递，14 项）
     └── gui_selfcheck.py        界面截图自检
 ```
 
 自测：
 
 ```bat
-python tools/smoke_test.py
+python tools/smoke_test.py     :: 引擎与管线：30 项
+python tools/dnd_test.py       :: 拖放链路：14 项
 ```
 
-预期输出 `===== 结果：通过 30 · 失败 0 =====`。
+预期分别输出 `===== 结果：通过 30 · 失败 0 =====` 与 `通过 14 · 失败 0`。
 
 ---
 

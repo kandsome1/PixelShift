@@ -30,15 +30,17 @@ from .engine import Engine, Job, Record, Summary, collect_files
 from .hasher import digest_file, human_size
 from .videos import check_tools
 
-# 有 tkinterdnd2 就用它的根窗口（支持拖入），没有就退回普通 Tk
-try:
-    from tkinterdnd2 import DND_FILES as _DND_FILES, TkinterDnD as _TkinterDnD
-    _BaseTk = _TkinterDnD.Tk
-    _DND_AVAILABLE = True
-except Exception:                                   # pragma: no cover
-    _DND_FILES = None
-    _BaseTk = tk.Tk
-    _DND_AVAILABLE = False
+# Windows 用原生 WM_DROPFILES（零依赖，见 dnd.py）；其它平台才尝试 tkinterdnd2
+_DND_FILES = None
+_DND_AVAILABLE = False
+_BaseTk = tk.Tk
+if sys.platform != "win32":
+    try:
+        from tkinterdnd2 import DND_FILES as _DND_FILES, TkinterDnD as _TkinterDnD
+        _BaseTk = _TkinterDnD.Tk
+        _DND_AVAILABLE = True
+    except Exception:                               # pragma: no cover
+        pass
 
 # ---------------------------------------------------------------- 配色 / 字体
 BG = "#F2F4F8"
@@ -147,6 +149,7 @@ class PixelShiftApp(_BaseTk):
         self._build_menu()
         self._build_ui()
         self._apply_preset(DEFAULT_PRESET, silent=True)
+        self._attach_dnd()
         self._check_env()
         self.after(80, self._pump)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -354,9 +357,9 @@ class PixelShiftApp(_BaseTk):
         ttk.Label(head, text="待处理文件", style="Bold.TLabel").grid(row=0, column=0, sticky="w")
         self.lbl_count = ttk.Label(head, text="0 个（图片 0 · 视频 0）", style="Hint.TLabel")
         self.lbl_count.grid(row=0, column=1, sticky="w", padx=(10, 0))
-        if self._dnd:
-            ttk.Label(head, text="支持拖入文件/文件夹", style="Hint.TLabel") \
-                .grid(row=0, column=2, sticky="e")
+        self.lbl_drop_hint = ttk.Label(head, text="", style="Hint.TLabel")
+        self.lbl_drop_hint.grid(row=0, column=2, sticky="e")
+        self._update_drop_hint()
 
         columns = ("kind", "size", "md5", "new", "status")
         self.tree = ttk.Treeview(wrap, columns=columns, show="tree headings",
@@ -393,9 +396,9 @@ class PixelShiftApp(_BaseTk):
                                          "或直接把文件拖进窗口")
         self.empty_hint.grid(row=3, column=0, pady=(0, 10))
 
-        if self._dnd:
+        if self._dnd == "dnd2":
             try:
-                self.tree.drop_target_register(self._dnd)
+                self.tree.drop_target_register(_DND_FILES)
                 self.tree.dnd_bind("<<Drop>>", self._on_drop)
             except Exception:
                 self._dnd = None
@@ -728,14 +731,67 @@ class PixelShiftApp(_BaseTk):
 
     # ============================================================ 拖放
     def _init_dnd(self):
-        return _DND_FILES if _DND_AVAILABLE else None
+        """返回 'native'（Windows 原生，零依赖）/ 'dnd2'（tkinterdnd2）/ None。"""
+        if sys.platform == "win32":
+            return "native"
+        return "dnd2" if _DND_AVAILABLE else None
 
-    def _on_drop(self, event):  # pragma: no cover - 需要 tkinterdnd2
+    def _attach_dnd(self) -> None:
+        self._drop_target = None
+        if self._dnd != "native":
+            return
+        from .dnd import attach_drop
+        self._drop_target = attach_drop(self, self._on_paths_dropped)
+        self.after(700, self._report_dnd_state)
+
+    def _report_dnd_state(self) -> None:
+        target = getattr(self, "_drop_target", None)
+        if target is None:
+            return
+        if target.ok:
+            self._log(f"拖放已启用（顶层窗口句柄 0x{target.hwnd:X}）", "dim")
+        else:
+            self._dnd = None
+            self._update_drop_hint()
+            self._log(f"拖放未启用：{target.error or '未知原因'}；请用「添加文件」按钮", "warn")
+
+    def _update_drop_hint(self) -> None:
+        if not hasattr(self, "lbl_drop_hint"):
+            return
+        if self._dnd:
+            self.lbl_drop_hint.configure(text="⇩ 可直接把文件 / 文件夹拖到这里",
+                                         foreground=MUTED)
+        else:
+            self.lbl_drop_hint.configure(text="")
+
+    def _on_paths_dropped(self, paths: list[str]) -> None:
+        """原生拖放回调（已回到 Tk 主线程）。"""
+        if not paths:
+            self._flash_drop("没有识别到文件", ok=False)
+            return
+        added = self._add_paths([Path(p) for p in paths])
+        if added > 0:
+            self._flash_drop(f"已拖入 {added} 个文件")
+            if self.empty_hint.winfo_exists():
+                self.empty_hint.grid_remove()
+        elif added == 0:
+            self._flash_drop("没有新增（重复或类型不支持）", ok=False)
+        else:
+            self._flash_drop("正在处理，稍后再拖入", ok=False)
+
+    def _flash_drop(self, text: str, ok: bool = True) -> None:
+        if not hasattr(self, "lbl_drop_hint"):
+            return
+        self.lbl_drop_hint.configure(text=f"✔ {text}" if ok else f"✖ {text}",
+                                     foreground=OK_C if ok else WARN_C)
+        self.after(1600, self._update_drop_hint)
+
+    def _on_drop(self, event):  # pragma: no cover - 仅 tkinterdnd2 路径
         try:
-            raw = self.tk.splitlist(event.data)
+            raw = list(self.tk.splitlist(event.data))
         except Exception:
             raw = [event.data]
-        self._add_paths([Path(p) for p in raw])
+        self._on_paths_dropped([str(p) for p in raw])
 
     # ============================================================ 添加 / 移除
     def add_files(self) -> None:
@@ -771,14 +827,15 @@ class PixelShiftApp(_BaseTk):
         self._add_paths([Path(path)])
         self.after(450, self.start)
 
-    def _add_paths(self, paths: list[Path]) -> None:
+    def _add_paths(self, paths: list[Path]) -> int:
+        """返回新增数量；-1 表示正在处理中无法添加。"""
         if self._running:
             self._log("处理中，等当前批次结束后再添加", "warn")
-            return
+            return -1
         new_jobs = collect_files([str(p) for p in paths], recursive=True)
         if not new_jobs:
             self._log("没有找到支持的图片/视频文件", "warn")
-            return
+            return 0
         added = 0
         for job in new_jobs:
             key = str(job.src.resolve()).lower()
@@ -787,9 +844,11 @@ class PixelShiftApp(_BaseTk):
             self._insert_job(job)
             added += 1
         self._refresh_count()
-        self._log(f"已添加 {added} 个文件（本次扫描到 {len(new_jobs)} 个）", "ok")
         if added == 0:
             self._log("这些文件已经在列表里了", "dim")
+        else:
+            self._log(f"已添加 {added} 个文件（本次扫描到 {len(new_jobs)} 个）", "ok")
+        return added
 
     def _insert_job(self, job: Job) -> str:
         try:
@@ -1274,6 +1333,12 @@ class PixelShiftApp(_BaseTk):
                 return
             if self.engine:
                 self.engine.stop()
+        target = getattr(self, "_drop_target", None)
+        if target is not None:
+            try:
+                target.detach()
+            except Exception:
+                pass
         try:
             self.digest_pool.shutdown(wait=False, cancel_futures=True)
         except Exception:
