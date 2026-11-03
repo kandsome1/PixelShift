@@ -1,0 +1,30 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# ---------- 运行时产物 ----------
+out_*/
+_pixelshift/
+PixelShift_报告_*.csv
+*.ps_tmp*
+*.tmp
+
+# ---------- 测试 / 调试产物 ----------
+shot_*.png
+*.log
+
+# ---------- 编辑器 / 系统 ----------
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+.DS_Store

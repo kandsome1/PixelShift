@@ -1,0 +1,9 @@
+# PixelShift 运行依赖
+#
+# 图形界面用的是 Python 自带 tkinter，不需要额外安装。
+# 视频处理调用本机 ffmpeg / ffprobe，必须自己装（见 README）。
+
+Pillow>=9.1.0
+
+# 可选：装了它才能把文件直接拖进窗口（不装也能用「添加文件/文件夹」按钮）
+# tkinterdnd2>=0.3.0
