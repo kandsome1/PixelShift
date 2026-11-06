@@ -29,6 +29,22 @@ _FMT_SAVE = {
 }
 _ALIAS = {"JPG": "JPEG", "TIF": "TIFF", "MPO": "JPEG"}
 
+# 高精度 / 非 sRGB 模式：一律不做会改变数值语义的像素级操作
+# （16bit 灰度、CMYK 印刷稿、浮点图，一旦转 RGB 就永久损失精度）
+PRECISE_MODES = {"I", "I;16", "I;16B", "I;16L", "I;16N", "F",
+                 "CMYK", "YCbCr", "LAB", "HSV"}
+
+# 各保存格式能原样接受的 PIL 模式；不在此集合里的才做转换
+FORMAT_MODES = {
+    "JPEG": {"L", "RGB", "CMYK"},
+    "PNG": {"1", "L", "LA", "I", "I;16", "P", "RGB", "RGBA"},
+    "TIFF": {"1", "L", "LA", "P", "RGB", "RGBA", "CMYK", "I", "I;16", "F", "YCbCr"},
+    "WEBP": {"RGB", "RGBA"},
+    "BMP": {"1", "L", "P", "RGB", "RGBA"},
+    "GIF": {"P", "L"},
+    "PPM": {"RGB", "L"},
+}
+
 # EXIF IFD0 标签
 T_DESC = 270
 T_MAKE = 271
@@ -99,8 +115,9 @@ def _grain_bytes(img: Image.Image, opt: ImageOptions, rng: random.Random) -> Ima
     """逐字节扰动：随机挑一小撮像素通道做 ±delta，肉眼不可见但破坏统计特征。"""
     if opt.pixel_noise <= 0:
         return img
+    # 只处理 8bit 单通道/三通道；其余模式直接返回，绝不转 RGB 降精度
     if img.mode not in ("RGB", "RGBA", "L", "LA"):
-        img = img.convert("RGB")
+        return img
     buf = bytearray(img.tobytes())
     total = len(buf)
     count = int(total * (opt.pixel_noise / 100.0) * 0.0035)
@@ -293,10 +310,13 @@ def process_image(src: str | Path, dst: str | Path, opt: ImageOptions,
         # ---- 静态图（含 GIF 首帧）
         img = im if not animated else im.convert("RGB")
         work = img.copy()
-        if work.mode not in ("RGB", "L", "RGBA", "LA", "P"):
-            work = work.convert("RGB")
+        # 高精度 / 非 RGB 模式：不做会改变数值语义的像素操作，只改元数据
+        src_mode = work.mode
+        precise = src_mode in PRECISE_MODES
+        if precise:
+            info["precise_mode"] = src_mode
 
-        # 1) 可选旋转 / 镜像
+        # 1) 可选旋转 / 镜像（纯几何变换，对任何模式都安全）
         if opt.rotate != "none":
             work = _rotate(work, opt.rotate)
             info["rotate"] = opt.rotate
@@ -305,30 +325,35 @@ def process_image(src: str | Path, dst: str | Path, opt: ImageOptions,
             info["mirror"] = True
 
         # 2) 居中裁切 + 放大回原尺寸（强改感知指纹）
-        if opt.crop_percent > 0:
+        if opt.crop_percent > 0 and not precise:
             work = _crop_zoom(work, opt.crop_percent, rng)
             info["crop_percent"] = opt.crop_percent
 
         # 3) 缩放往返（打断重采样指纹）
-        if opt.micro_resize > 0:
+        if opt.micro_resize > 0 and not precise:
             work = _resize_roundtrip(work, rng.randint(1, opt.micro_resize))
 
         # 4) 色调微调
-        if opt.color_jitter > 0:
+        if opt.color_jitter > 0 and not precise:
             work = _color_jitter(work, opt.color_jitter, rng)
 
         # 5) 像素噪声
-        if opt.pixel_noise > 0:
+        if opt.pixel_noise > 0 and not precise:
             work = _grain_bytes(work, opt, rng)
 
-        # 6) 格式落定
-        if out_fmt == "JPEG":
-            work = _flatten(work)
-        elif out_fmt in ("PNG", "WEBP", "TIFF", "BMP"):
-            if work.mode == "P":
-                work = work.convert("RGBA") if "transparency" in img.info else work.convert("RGB")
-            if out_fmt == "BMP" and work.mode not in ("RGB", "L"):
+        # 6) 格式落定：只在目标格式不支持该模式时才转换，并记录原因
+        accepted = FORMAT_MODES.get(out_fmt)
+        if accepted and work.mode not in accepted:
+            before = work.mode
+            if out_fmt == "JPEG" and before in ("RGBA", "LA", "P"):
                 work = _flatten(work)
+                info["mode_note"] = f"{before} → RGB（铺白底）"
+            else:
+                work = work.convert("RGB")
+                info["mode_note"] = f"{before} → RGB（{out_fmt} 不支持该模式）"
+        elif work.mode == "P" and out_fmt in ("PNG", "WEBP", "TIFF"):
+            work = work.convert("RGBA") if "transparency" in img.info else work.convert("RGB")
+            info["mode_note"] = "P → RGBA/RGB（保留透明）"
 
         meta = random_fp.image_metadata(opt.meta_profile, rng)
         exif_bytes = _build_exif(meta) if opt.inject_metadata else b""

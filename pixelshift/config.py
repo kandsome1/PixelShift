@@ -179,7 +179,7 @@ PRESETS: dict[str, Preset] = {
     ),
 }
 
-DEFAULT_PRESET = "medium"
+DEFAULT_PRESET = "lazy"
 
 
 def preset_options(key: str) -> tuple[ImageOptions, VideoOptions]:

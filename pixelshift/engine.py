@@ -209,6 +209,10 @@ class Engine:
                         changed_note.append(f"{job.src.suffix} 无元数据区，已改用重编码")
                     if info.get("mirror"):
                         changed_note.append("镜像")
+                    if info.get("precise_mode"):
+                        changed_note.append(f"{info['precise_mode']} 高精度模式：只改元数据")
+                    if info.get("mode_note"):
+                        changed_note.append(info["mode_note"])
                     if info.get("note"):
                         changed_note.append(info["note"])
                     if self.opts.image.inject_metadata:

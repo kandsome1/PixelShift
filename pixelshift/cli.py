@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from . import __version__
-from .config import PRESETS, RunOptions, preset_options
+from .config import DEFAULT_PRESET, PRESETS, RunOptions, preset_options
 from .engine import Engine, collect_files
 from .hasher import human_size
 from .videos import check_tools
@@ -23,7 +23,7 @@ def build_args(argv=None) -> argparse.Namespace:
         description="PixelShift —— 批量/单个改写图片与视频的特征码（文件哈希 + 感知指纹）")
     ap.add_argument("-i", "--input", nargs="+", required=True, help="文件或目录，可多个")
     ap.add_argument("-o", "--out", default="", help="输出目录；留空则输出到源目录 _pixelshift 下")
-    ap.add_argument("-p", "--preset", default="medium", choices=list(PRESETS),
+    ap.add_argument("-p", "--preset", default=DEFAULT_PRESET, choices=list(PRESETS),
                     help="强度预设：light / medium / strong")
     ap.add_argument("--only", default="all", choices=["all", "image", "video"])
     ap.add_argument("--video-mode", default=None,

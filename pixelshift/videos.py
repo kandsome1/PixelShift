@@ -117,10 +117,23 @@ class ProbeInfo:
     has_sub: bool = False
     format_name: str = ""
     bitrate: int = 0
+    pix_fmt: str = ""
+    color_primaries: str = ""
+    color_transfer: str = ""
+    color_space: str = ""
 
     @property
     def resolution(self) -> str:
         return f"{self.width}x{self.height}"
+
+    @property
+    def bit_depth(self) -> int:
+        """从 pix_fmt 推断位深：yuv420p10le → 10，yuv420p → 8。"""
+        p = self.pix_fmt.lower()
+        for d in ("16", "12", "10"):
+            if d + "le" in p or d + "be" in p:
+                return int(d)
+        return 8
 
 
 def probe(path: str | Path) -> ProbeInfo:
@@ -161,6 +174,10 @@ def probe(path: str | Path) -> ProbeInfo:
             info.vcodec = st.get("codec_name", "")
             info.width = int(st.get("width") or 0)
             info.height = int(st.get("height") or 0)
+            info.pix_fmt = st.get("pix_fmt") or ""
+            info.color_primaries = st.get("color_primaries") or ""
+            info.color_transfer = st.get("color_transfer") or ""
+            info.color_space = st.get("color_space") or ""
             rate = st.get("avg_frame_rate") or st.get("r_frame_rate") or "0/1"
             try:
                 num, _, den = rate.partition("/")
@@ -329,6 +346,49 @@ def _meta_args(opt: VideoOptions, rng: random.Random, container: str,
     return args
 
 
+# libx264 支持的像素格式（gyan full build 含 10bit 变体）
+_X264_PIX_FMTS = {
+    "yuv420p", "yuvj420p", "yuv422p", "yuvj422p", "yuv444p", "yuvj444p",
+    "nv12", "nv16", "nv21", "yuv420p10le", "yuv422p10le", "yuv444p10le",
+    "nv20le", "gray", "gray10le",
+}
+# 源格式 → 可编码的等价格式
+_PIX_ALIAS = {
+    "p010le": "yuv420p10le", "p016le": "yuv420p10le", "p210le": "yuv422p10le",
+    "nv16": "yuv422p", "nv20le": "yuv422p10le",
+    "yuvj420p": "yuv420p", "yuvj422p": "yuv422p", "yuvj444p": "yuv444p",
+    "gbrp": "yuv444p", "gbrp10le": "yuv444p10le", "gbrp12le": "yuv444p10le",
+    "yuv410p": "yuv420p", "yuv411p": "yuv422p",
+}
+
+
+def pick_pix_fmt(src_pix_fmt: str) -> str:
+    """按源位深选输出像素格式 —— 10bit / 12bit 内容不会被无声降到 8bit。"""
+    p = (src_pix_fmt or "").lower().strip()
+    if not p:
+        return "yuv420p"
+    if p in _X264_PIX_FMTS:
+        return p
+    if p in _PIX_ALIAS:
+        return _PIX_ALIAS[p]
+    for depth in ("16", "12", "10"):
+        if p.endswith(depth + "le") or p.endswith(depth + "be"):
+            # x264 最高到 10bit：12/16bit 降到 10bit 而不是 8bit
+            return "yuv420p10le"
+    return "yuv420p"
+
+
+def _color_args(pr: ProbeInfo) -> list[str]:
+    """显式透传色彩元数据，避免 HDR/BT.2020 内容被当 sRGB 编码。"""
+    out: list[str] = []
+    for flag, val in (("-color_primaries", pr.color_primaries),
+                      ("-color_trc", pr.color_transfer),
+                      ("-colorspace", pr.color_space)):
+        if val and val not in ("unknown", "reserved"):
+            out += [flag, val]
+    return out
+
+
 def build_command(src: Path, dst: Path, opt: VideoOptions, pr: ProbeInfo,
                   rng: random.Random, mode: str | None = None) -> list[str]:
     mode = mode or opt.mode
@@ -350,10 +410,14 @@ def build_command(src: Path, dst: Path, opt: VideoOptions, pr: ProbeInfo,
             args += ["-map", "0:s?"]
 
         vf = build_filter(opt, pr, rng, mode)
+        out_pix_fmt = pick_pix_fmt(pr.pix_fmt)
         args += ["-c:v", "libx264", "-preset", opt.preset,
-                 "-crf", str(max(16, min(32, opt.crf))), "-pix_fmt", "yuv420p"]
+                 "-crf", str(max(16, min(32, opt.crf))), "-pix_fmt", out_pix_fmt]
+        # profile 必须跟着位深走：10bit 不能用 high（那是 8bit 档）
+        profile = "high10" if out_pix_fmt.endswith("10le") else "high"
         keyint = opt.keyint if opt.keyint > 0 else rng.randint(200, 300)
-        args += ["-g", str(keyint), "-bf", "3", "-profile:v", "high"]
+        args += ["-g", str(keyint), "-bf", "3", "-profile:v", profile]
+        args += _color_args(pr)
         if vf:
             args += ["-vf", vf]
 
@@ -389,7 +453,8 @@ def process_video(src: str | Path, dst: str | Path, opt: VideoOptions,
     pr = probe(src)
     info.update(duration=round(pr.duration, 2), width=pr.width, height=pr.height,
                 vcodec=pr.vcodec, acodec=pr.acodec, fps=round(pr.fps, 3),
-                has_audio=pr.has_audio, has_sub=pr.has_sub)
+                has_audio=pr.has_audio, has_sub=pr.has_sub,
+                pix_fmt=pr.pix_fmt, bit_depth=pr.bit_depth)
 
     dst.parent.mkdir(parents=True, exist_ok=True)
     mode = opt.mode
@@ -425,7 +490,11 @@ def process_video(src: str | Path, dst: str | Path, opt: VideoOptions,
         out_pr = probe(dst)
         info.update(out_duration=round(out_pr.duration, 2),
                     out_width=out_pr.width, out_height=out_pr.height,
-                    out_vcodec=out_pr.vcodec)
+                    out_vcodec=out_pr.vcodec,
+                    out_pix_fmt=out_pr.pix_fmt, out_bit_depth=out_pr.bit_depth)
+        if pr.bit_depth > 8 and out_pr.bit_depth < pr.bit_depth:
+            extra = f"位深 {pr.bit_depth}bit → {out_pr.bit_depth}bit"
+            info["note"] = (info.get("note", "") + " " + extra).strip()
     except VideoError as exc:
         info["verify_error"] = str(exc)
 

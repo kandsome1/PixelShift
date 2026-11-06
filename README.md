@@ -1,6 +1,6 @@
 # PixelShift
 
-![version](https://img.shields.io/badge/version-1.4.2-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-1.4.3-blue?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![dependencies](https://img.shields.io/badge/dependencies-Pillow-brightgreen?style=flat-square)
@@ -18,8 +18,8 @@
 
 | 文件 | 大小 | 说明 |
 |---|---|---|
-| `PixelShift-1.4.2-win64.exe` | 11.6 MB | **推荐**。单文件，双击即用，不用装 Python |
-| `PixelShift-1.4.2-win64-onedir.zip` | 25.8 MB | 解压后双击 `PixelShift.exe`。启动更快（1.3s vs 2.5s），杀软误报更少 |
+| `PixelShift-1.4.3-win64.exe` | 11.6 MB | **推荐**。单文件，双击即用，不用装 Python |
+| `PixelShift-1.4.3-win64-onedir.zip` | 25.8 MB | 解压后双击 `PixelShift.exe`。启动更快（1.3s vs 2.5s），杀软误报更少 |
 
 页面底部的 `Source code` 是源码包，普通使用不用下。
 
@@ -40,12 +40,15 @@
 
 | 预设 | 改了什么 | 体积变化 | 速度 | 适合 |
 |---|---|---|---|---|
-| **懒人** | 只往容器里注入随机元数据，不重编码、不动一个像素 | **+0.2%** | 瞬时 | 只想换掉文件哈希，要求体积几乎不变 |
+| **懒人**（默认） | 只往容器里注入随机元数据，不重编码、不动一个像素 | **+0.2%** | 瞬时 | 只想换掉文件哈希，要求体积几乎不变 |
 | **轻度** | 重新编码 + 重建元数据，像素几乎不动 | ±0% | 秒级 | 想换字节又完全保留画质 |
-| **标准** | 像素微扰 + 轻微调色 + 重编码 | +30% 左右 | 秒级 | 日常推荐，肉眼看不出差别 |
-| **强力** | 裁切 1.5% + 加噪 + 调色 + 视频深度重编码 | +50%~150% | 较慢 | 需要连"画面指纹"一起改掉 |
+| **标准** | 像素微扰 + 轻微调色 + 重编码 | +30% 左右 | 秒级 | 需要画面指纹也有变化，肉眼看不出差别 |
+| **强力** | 裁切 1.5% + 加噪 + 调色 + 视频深度重编码 | +50%~150% | 较慢 | 需要连"画面指纹"一起拉开差距 |
 
-不确定选哪个就用**标准**。
+默认就是**懒人**：只换文件哈希，不动画面，体积不变。需要连画面指纹一起改时，再往上调。
+
+> 16bit 灰度图、CMYK 印刷稿、10bit HDR 视频会自动进入「只改元数据」的保守路径，
+> 不做任何会损失精度或色彩空间的像素操作。
 
 ## 它到底改了什么
 
@@ -121,7 +124,7 @@ PyInstaller 打出来的 exe 常被启发式误报。换用 `onedir.zip` 版本�
 
 ## 许可
 
-MIT License —— 见 [LICENSE](LICENSE)。仓库当前为私有，自行分发时请保留版权声明。
+MIT License —— 见 [LICENSE](LICENSE)。自行分发时请保留版权声明。
 
 ---
 
