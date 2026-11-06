@@ -8,9 +8,50 @@
 """
 
 import sys
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
+
+# ---- 生成 exe 版本资源（右键属性里显示中文名）--------------------------------
+sys.path.insert(0, str(Path(SPECPATH)))
+from pixelshift import __version__ as _VER          # noqa: E402
+
+_parts = [int(x) for x in _VER.split(".")] + [0, 0, 0, 0]
+_ver_tuple = tuple(_parts[:4])
+_ver_str = ".".join(str(x) for x in _parts[:3])
+
+_ver_file = Path(SPECPATH) / "build" / "version_info.txt"
+_ver_file.parent.mkdir(parents=True, exist_ok=True)
+_ver_file.write_text(f"""VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers={_ver_tuple},
+    prodvers={_ver_tuple},
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable('080404b0', [
+        StringStruct('CompanyName', 'kandsome1'),
+        StringStruct('FileDescription', '像素位移 PixelShift · 图片视频特征码改写器'),
+        StringStruct('FileVersion', '{_ver_str}'),
+        StringStruct('InternalName', 'PixelShift'),
+        StringStruct('LegalCopyright', 'MIT License'),
+        StringStruct('OriginalFilename', 'PixelShift.exe'),
+        StringStruct('ProductName', '像素位移 PixelShift'),
+        StringStruct('ProductVersion', '{_ver_str}')
+      ])
+    ]),
+    VarFileInfo([VarStruct('Translation', [2052, 1200])])
+  ]
+)
+""", encoding="utf-8")
 
 # Pillow 的编解码器是运行时按需 import 的，必须显式声明
 PIL_PLUGINS = [
@@ -71,6 +112,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon="assets/app.ico",
+    version=str(_ver_file),
 )
 
 coll = COLLECT(

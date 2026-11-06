@@ -10,6 +10,7 @@
     cli     : 命令行入口（无界面批处理，也用于自测）
 """
 
-__version__ = "1.4.3"
+__version__ = "1.4.4"
 APP_NAME = "PixelShift"
-APP_TITLE = "PixelShift · 图片视频特征码改写器"
+APP_NAME_CN = "像素位移"
+APP_TITLE = "PixelShift 像素位移 · 图片视频特征码改写器"

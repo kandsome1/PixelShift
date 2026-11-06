@@ -22,7 +22,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image
 
-from . import APP_TITLE, __version__
+from . import APP_NAME, APP_NAME_CN, APP_TITLE, __version__
 from .config import (DEFAULT_PRESET, IMAGE_EXTS, PRESETS, SUPPORTED_EXTS, VIDEO_EXTS,
                      VIDEO_PRESETS_ENCODER, ImageOptions, RunOptions, VideoOptions,
                      kind_of, preset_options)
@@ -1350,9 +1350,10 @@ class PixelShiftApp(_BaseTk):
 
     def _show_help(self) -> None:
         text = (
+            f"{APP_NAME_CN}（{APP_NAME}）· 使用说明\n\n"
             "使用步骤\n"
             "1) 右上角添加文件或文件夹（也支持直接拖入窗口），列表会显示原 MD5。\n"
-            "2) 顶部选强度预设（轻度 / 标准 / 强力），也可以到右侧逐项微调。\n"
+            "2) 顶部选强度预设（懒人 / 轻度 / 标准 / 强力），也可以到右侧逐项微调。\n"
             "3) 「输出与运行」里选输出目录（留空 = 源文件旁的 _pixelshift）。\n"
             "4) 点「开始处理」，处理结果与原 MD5、pHash 差异会写回列表，并生成 CSV 报告。\n\n"
             "改了什么\n"
@@ -1361,21 +1362,26 @@ class PixelShiftApp(_BaseTk):
             "（裁切/镜像/变速）后差异更大。\n"
             "· 元数据：可清空原始 EXIF/容器元数据，写入一套全新的随机设备、软件、时间与指纹。\n\n"
             "强度怎么选\n"
-            "· 轻度：只换字节，画面几乎零改动，秒级完成（视频为 -c copy 重封装）。\n"
-            "· 标准：像素级微扰 + 重编码，肉眼无差，推荐日常使用。\n"
-            "· 强力：裁切 1.5% + 噪声 + 调色 + 重编码，感知指纹差异大，画质轻微损失。\n")
+            "· 懒人（默认）：只注入元数据，不重编码、不动画面，体积涨 0.2%，瞬时完成。\n"
+            "· 轻度：重新编码 + 重建元数据，画面几乎零改动，秒级完成。\n"
+            "· 标准：像素级微扰 + 重编码，肉眼无差。\n"
+            "· 强力：裁切 1.5% + 噪声 + 调色 + 重编码，感知指纹差异大，画质轻微损失。\n\n"
+            "高精度保护\n"
+            "· 16bit 灰度、CMYK 印刷稿、10bit HDR 视频会自动只改元数据，不损失精度与色彩空间。\n")
         self._text_window("使用说明", text)
 
     def _show_about(self) -> None:
         self._text_window(
-            "关于 PixelShift",
-            f"PixelShift v{__version__}\n\n"
+            f"关于 {APP_NAME_CN}",
+            f"{APP_NAME_CN}  PixelShift  v{__version__}\n"
+            "图片 / 视频特征码改写器\n\n"
             "批量 / 单个改写图片与视频的特征码：\n"
             "· 文件层：MD5 / SHA1 必然改变\n"
             "· 感知层：pHash / aHash 可变（强度可调）\n"
             "· 元数据：清空 + 重建随机指纹\n\n"
             f"Python {sys.version.split()[0]} · Pillow · ffmpeg\n"
-            "处理全部在本机完成，不上传任何文件。")
+            "处理全部在本机完成，不联网、不上传任何文件。\n\n"
+            "MIT License · 源码：github.com/kandsome1/PixelShift")
 
     def _text_window(self, title: str, text: str) -> None:
         win = tk.Toplevel(self)

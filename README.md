@@ -1,6 +1,8 @@
-# PixelShift
+# PixelShift 像素位移
 
-![version](https://img.shields.io/badge/version-1.4.3-blue?style=flat-square)
+**简体中文** | [English](README.en.md)
+
+![version](https://img.shields.io/badge/version-1.4.4-blue?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![dependencies](https://img.shields.io/badge/dependencies-Pillow-brightgreen?style=flat-square)
@@ -18,8 +20,8 @@
 
 | 文件 | 下载 | 解压后 | 说明 |
 |---|---|---|---|
-| `PixelShift-1.4.3-win64.exe` | 11.7 MB | — | **推荐**。单文件，双击即用，不用装 Python |
-| `PixelShift-1.4.3-win64-onedir.zip` | 11.7 MB | 25.9 MB | 解压后双击 `PixelShift.exe`。启动更快（1.3s vs 2.5s），杀软误报更少 |
+| `PixelShift-1.4.4-win64.exe` | 11.7 MB | — | **推荐**。单文件，双击即用，不用装 Python |
+| `PixelShift-1.4.4-win64-onedir.zip` | 11.7 MB | 25.9 MB | 解压后双击 `PixelShift.exe`。启动更快（1.3s vs 2.5s），杀软误报更少 |
 
 > 两个下载大小几乎一样（11.7 MB），是因为 onedir 里 994 个文件压缩率很高（约 45%）。
 > 区别在于**解压后的磁盘占用**（25.9 MB）和**启动速度**。

@@ -20,7 +20,7 @@ from .videos import check_tools
 def build_args(argv=None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         prog="pixelshift",
-        description="PixelShift —— 批量/单个改写图片与视频的特征码（文件哈希 + 感知指纹）")
+        description="PixelShift 像素位移 —— 批量/单个改写图片与视频的特征码（文件哈希 + 感知指纹）")
     ap.add_argument("-i", "--input", nargs="+", required=True, help="文件或目录，可多个")
     ap.add_argument("-o", "--out", default="", help="输出目录；留空则输出到源目录 _pixelshift 下")
     ap.add_argument("-p", "--preset", default=DEFAULT_PRESET, choices=list(PRESETS),
@@ -39,7 +39,7 @@ def build_args(argv=None) -> argparse.Namespace:
     ap.add_argument("--seed", type=int, default=None, help="固定随机种子（可复现）")
     ap.add_argument("--dry-run", action="store_true", help="只列出将要处理的文件")
     ap.add_argument("-v", "--verbose", action="store_true")
-    ap.add_argument("--version", action="version", version=f"PixelShift {__version__}")
+    ap.add_argument("--version", action="version", version=f"PixelShift 像素位移 {__version__}")
     return ap.parse_args(argv)
 
 
